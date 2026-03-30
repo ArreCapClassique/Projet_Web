@@ -79,7 +79,7 @@ def login():
     if user is None or not check_password_hash(user.password_hash, password):
         return {"error": "Invalid username or password."}, 401
 
-    session["user"] = user.username
+    session["username"] = user.username
     return {"message": "Login successful!"}, 200
 
 
@@ -102,7 +102,7 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    session["user"] = user.username
+    session["username"] = user.username
     return {"message": "Registration successful!"}, 200
 
 

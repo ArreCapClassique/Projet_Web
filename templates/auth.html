@@ -2,6 +2,10 @@
 
 {% block title %}Authentification{% endblock %}
 
+{%block script %}
+<script src="{{ url_for('static', filename='js/auth.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
 <div class="auth-container">
     <form id="login-form">

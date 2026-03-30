@@ -3,7 +3,18 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-<h1>Welcome to GenFlix</h1>
+<h1>Welcome {{ username }}!</h1>
 
+<p>You have rated {{ rated_count }} series.</p>
+
+<h2>Recent activity</h2>
+
+<ul>
+    {% for item in recent %}
+    <li>{{ item.title }} — {{ item.rating }}</li>
+    {% else %}
+    <li>No activity yet.</li>
+    {% endfor %}
+</ul>
 
 {% endblock %}
