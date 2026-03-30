@@ -1,9 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Search{% endblock %}
+
+{%block script %}
+<script src="{{ url_for('static', filename='js/search.js') }}" defer></script>
+{% endblock %}
 
 {% block content %}
-<h1>Welcome to GenFlix</h1>
+<h1>Search TV Series</h1>
 
+<form id="searchForm">
+    <input type="text" id="query" name="query" placeholder="Search for a TV series..." required>
+    <button type="submit">Search</button>
+</form>
 
+<div id="results"></div>
 {% endblock %}

@@ -1,13 +1,56 @@
 from functools import wraps
+import requests
 
-from flask import Blueprint, request, session, g, send_file
+from flask import Blueprint, request, session, g, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from extensions import db
-from models import User
+from models import User, Series, UserInteraction
 
 
 api = Blueprint("api", __name__)
+
+
+def save_rating(user_id, show, rating):
+    tvmaze_id = show.get("id")
+    title = show.get("name")
+    image = show.get("image") or {}
+    summary = show.get("summary")
+
+    if not tvmaze_id or not title:
+        raise ValueError("Missing required show data: id or name")
+
+    series = Series.query.get(tvmaze_id)
+
+    if not series:
+        series = Series(
+            tvmaze_id=tvmaze_id,
+            title=title,
+            image_url=image.get("medium") or image.get("original"),
+            summary=summary,
+        )
+        db.session.add(series)
+        db.session.flush()
+
+    interaction = UserInteraction.query.filter_by(
+        user_id=user_id,
+        tvmaze_id=tvmaze_id,
+    ).first()
+
+    if interaction:
+        interaction.rating = rating
+        interaction.is_watched = True
+    else:
+        interaction = UserInteraction(
+            user_id=user_id,
+            tvmaze_id=tvmaze_id,
+            rating=rating,
+            is_watched=True,
+        )
+        db.session.add(interaction)
+
+    db.session.commit()
+    return interaction
 
 
 def login_required(f):
@@ -23,7 +66,7 @@ def login_required(f):
         if "user" not in session:
             return {"error": "non autorisé"}, 401
 
-        user = User.get_by_username(session["user"])
+        user = User.get_by_username(session["username"])
         if user is None:
             session.clear()
             return {"error": "non autorisé"}, 401
@@ -46,7 +89,7 @@ def auth_required(f):
     def wrapper(*args, **kwargs):
         user = None
 
-        username = session.get("user")
+        username = session.get("username")
         if username is not None:
             user = User.get_by_username(username)
 
@@ -113,11 +156,50 @@ def logout():
     return {"ok": True}
 
 
-###########################
-##### ROUTE DASHBOARD #####
-###########################
+@api.route("/api/search", methods=["GET"])
+def api_search():
+    query = request.args.get("q")
+
+    res = requests.get(
+        "https://api.tvmaze.com/search/shows",
+        params={"q": query},
+        timeout=10,
+    )
+    res.raise_for_status()
+
+    return jsonify(res.json()), 200
 
 
-####################
-#### ROUTE APP #####
-####################
+@api.route("/api/rate", methods=["POST"])
+def rate():
+    if "username" not in session:
+        return jsonify({"error": "Authentication required"}), 401
+
+    data = request.get_json(silent=True) or {}
+
+    show = data.get("show")
+    rating = data.get("rating")
+
+    if not show or not rating:
+        return jsonify({"error": "Missing show or rating"}), 400
+
+    user = User.get_by_username(session["username"])
+    if user is None:
+        return jsonify({"error": "User not found"}), 404
+
+    try:
+        interaction = save_rating(user.id, show, rating)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+    return jsonify(
+        {
+            "message": "Rating saved successfully",
+            "interaction_id": interaction.id,
+            "tvmaze_id": interaction.tvmaze_id,
+            "rating": interaction.rating,
+        }
+    ), 200
