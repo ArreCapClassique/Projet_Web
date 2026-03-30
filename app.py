@@ -1,7 +1,6 @@
 from flask import Flask, render_template, session, redirect
 
 from extensions import db, sess
-from models import User
 from routes import api
 
 app = Flask(__name__)
@@ -24,10 +23,18 @@ with app.app_context():
 
 @app.route("/", methods=["GET"])
 def home():
-    username = session.get("user", None)
+    username = session.get("username", None)
     if username is not None:
         return render_template("/home.html", username=username)
     return render_template("/auth.html")
+
+
+@app.route("/search", methods=["GET"])
+def search():
+    username = session.get("username", None)
+    if username is not None:
+        return render_template("/search.html")
+    return redirect("/")
 
 
 if __name__ == "__main__":
