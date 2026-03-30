@@ -26,8 +26,8 @@ with app.app_context():
 def home():
     username = session.get("user", None)
     if username is not None:
-        return render_template("home.html")
-    return render_template("auth.html")
+        return render_template("/home.html", username=username)
+    return render_template("/auth.html")
 
 
 if __name__ == "__main__":
