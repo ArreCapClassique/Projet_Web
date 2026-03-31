@@ -1,7 +1,13 @@
+import os
+import json
+import requests
+import google.generativeai as genai
+import typing_extensions as typing
+
 from functools import wraps
 import requests
 
-from flask import Blueprint, request, session, g, jsonify
+from flask import Blueprint, request, session, g, jsonify, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from extensions import db
@@ -21,7 +27,7 @@ def login_required(f):
 
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if "user" not in session:
+        if session.get("username") is None:
             return {"error": "non autorisé"}, 401
 
         user = User.get_by_username(session["username"])
@@ -91,7 +97,7 @@ def logout():
 
 @api.route("/api/search", methods=["GET"])
 @login_required
-def api_search():
+def search():
     query = request.args.get("q")
 
     res = requests.get(
@@ -179,3 +185,77 @@ def save_rating(user_id, show, rating):
 
     db.session.commit()
     return interaction
+
+
+##### ROUTE RECOMMANDATION ###
+
+class RecommendationList(typing.TypedDict):
+    titles: list[str]
+
+@api.route("/api/recommend", methods=["GET"])
+def recommend():
+    if "username" not in session:
+        return jsonify({"error": "Authentication required"}), 401
+
+    user = User.get_by_username(session["username"])
+    if user is None:
+        return jsonify({"error": "User not found"}), 404
+
+    interactions = UserInteraction.query.filter_by(user_id=user.id).all()
+    
+    if not interactions:
+        return jsonify({"message": "Not enough data. Please rate some shows first.", "results": []}), 200
+
+    liked = []
+    neutral = []
+    disliked = []
+    
+    for interaction in interactions:
+        series_title = interaction.series.title 
+        if interaction.rating == "1":
+            liked.append(series_title)
+        elif interaction.rating == "0":
+            neutral.append(series_title)
+        elif interaction.rating == "-1":
+            disliked.append(series_title)
+
+    # Prompt
+    prompt = "Tu es un expert en séries TV. Un utilisateur a les préférences suivantes:\n"
+    prompt += f"- Séries qu'il ADORE (aimé) : {', '.join(liked) if liked else 'Aucune'}\n"
+    prompt += f"- Séries MOYENNES (neutre) : {', '.join(neutral) if neutral else 'Aucune'}\n"
+    prompt += f"- Séries qu'il DÉTESTE (n'aime pas) : {', '.join(disliked) if disliked else 'Aucune'}\n"
+    prompt += "En te basant sur ces goûts, recommande 3 nouvelles séries télévisées. Retourne UNIQUEMENT les titres originaux en anglais pour faciliter la recherche dans une API."
+
+    # API
+    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+    model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+                response_schema=RecommendationList,
+            ),
+        )
+        data = json.loads(response.text)
+        recommended_titles = data.get("titles", [])
+    except Exception as e:
+        return jsonify({"error": f"Erreur lors de la génération IA : {str(e)}"}), 500
+
+    final_results = []
+    for title in recommended_titles:
+        try:
+            res = requests.get(
+                "https://api.tvmaze.com/search/shows", 
+                params={"q": title},
+                timeout=10,
+            )
+            if res.status_code == 200:
+                tvmaze_data = res.json()
+                if tvmaze_data: 
+                    final_results.append(tvmaze_data[0]['show'])
+        except requests.exceptions.RequestException:
+            continue
+
+    return jsonify({"results": final_results}), 200

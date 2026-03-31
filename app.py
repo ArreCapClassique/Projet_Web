@@ -1,7 +1,10 @@
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, render_template, session, redirect
 
 from extensions import db, sess
 from routes import api
+
 
 app = Flask(__name__)
 
