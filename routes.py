@@ -118,17 +118,17 @@ def rate():
     data = request.get_json(silent=True) or {}
 
     show = data.get("show")
-    rating = data.get("rating")
+    status = data.get("status") 
 
-    if not show or not rating:
-        return jsonify({"error": "Missing show or rating"}), 400
+    if not show or not status:
+        return jsonify({"error": "Missing show or status"}), 400
 
     user = User.get_by_username(session["username"])
     if user is None:
         return jsonify({"error": "User not found"}), 404
 
     try:
-        interaction = save_rating(user.id, show, rating)
+        interaction = save_rating(user.id, show, status)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -137,15 +137,15 @@ def rate():
 
     return jsonify(
         {
-            "message": "Rating saved successfully",
+            "message": "Status saved successfully",
             "interaction_id": interaction.id,
             "tvmaze_id": interaction.tvmaze_id,
-            "rating": interaction.rating,
+            "status": interaction.status, 
         }
     ), 200
 
 
-def save_rating(user_id, show, rating):
+def save_rating(user_id, show, status):
     tvmaze_id = show.get("id")
     title = show.get("name")
     image = show.get("image") or {}
@@ -172,14 +172,13 @@ def save_rating(user_id, show, rating):
     ).first()
 
     if interaction:
-        interaction.rating = rating
-        interaction.is_watched = True
+        interaction.status = status 
     else:
         interaction = UserInteraction(
             user_id=user_id,
             tvmaze_id=tvmaze_id,
-            rating=rating,
-            is_watched=True,
+            status=status,
+          
         )
         db.session.add(interaction)
 
@@ -194,39 +193,59 @@ class RecommendationList(typing.TypedDict):
 
 @api.route("/api/recommend", methods=["GET"])
 def recommend():
-    if "username" not in session:
-        return jsonify({"error": "Authentication required"}), 401
+    username = session.get("username")
+    user = User.get_by_username(username) if username else None
 
-    user = User.get_by_username(session["username"])
-    if user is None:
-        return jsonify({"error": "User not found"}), 404
+    interactions = []
+    if user:
+        interactions = UserInteraction.query.filter_by(user_id=user.id).all()
 
-    interactions = UserInteraction.query.filter_by(user_id=user.id).all()
-    
-    if not interactions:
-        return jsonify({"message": "Not enough data. Please rate some shows first.", "results": []}), 200
-
+    # Case A
+    if not user or not interactions:
+        try:
+            res = requests.get("https://api.tvmaze.com/shows", timeout=10)
+            if res.status_code == 200:
+                shows = res.json()
+                shows.sort(key=lambda x: x.get('weight', 0), reverse=True)
+                return jsonify({"results": shows[:8]}), 200 
+            else:
+                return jsonify({"error": "Failed to fetch popular shows"}), res.status_code
+        except requests.exceptions.RequestException as e:
+            return jsonify({"error": f"TVmaze network error: {str(e)}"}), 500
+    #Case B
     liked = []
     neutral = []
     disliked = []
+    interested = []
+    not_interested = []
+    exclude_titles = [] 
     
     for interaction in interactions:
         series_title = interaction.series.title 
-        if interaction.rating == "1":
+        exclude_titles.append(series_title)
+        
+        if interaction.status == "0":
             liked.append(series_title)
-        elif interaction.rating == "0":
+        elif interaction.status == "1":
             neutral.append(series_title)
-        elif interaction.rating == "-1":
+        elif interaction.status == "2":
             disliked.append(series_title)
+        elif interaction.status == "3":
+            interested.append(series_title)
+        elif interaction.status == "4":
+            not_interested.append(series_title)
 
-    # Prompt
     prompt = "Tu es un expert en séries TV. Un utilisateur a les préférences suivantes:\n"
-    prompt += f"- Séries qu'il ADORE (aimé) : {', '.join(liked) if liked else 'Aucune'}\n"
-    prompt += f"- Séries MOYENNES (neutre) : {', '.join(neutral) if neutral else 'Aucune'}\n"
-    prompt += f"- Séries qu'il DÉTESTE (n'aime pas) : {', '.join(disliked) if disliked else 'Aucune'}\n"
-    prompt += "En te basant sur ces goûts, recommande 3 nouvelles séries télévisées. Retourne UNIQUEMENT les titres originaux en anglais pour faciliter la recherche dans une API."
+    prompt += f"- Séries qu'il ADORE : {', '.join(liked) if liked else 'Aucune'}\n"
+    prompt += f"- Séries MOYENNES : {', '.join(neutral) if neutral else 'Aucune'}\n"
+    prompt += f"- Séries qu'il DÉTESTE : {', '.join(disliked) if disliked else 'Aucune'}\n"
+    prompt += f"- Séries qui l'INTÉRESSENT : {', '.join(interested) if interested else 'Aucune'}\n"
+    prompt += f"- Séries qui NE l'INTÉRESSENT PAS : {', '.join(not_interested) if not_interested else 'Aucune'}\n"
+    
+    prompt += f"\nIMPORTANT : NE RECOMMANDE SURTOUT PAS les séries suivantes car l'utilisateur les connaît déjà : {', '.join(exclude_titles)}.\n"
+    
+    prompt += "En te basant sur ces goûts, recommande 12 nouvelles séries télévisées. Retourne UNIQUEMENT les titres originaux en anglais."
 
-    # API
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
     model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
 
@@ -245,16 +264,19 @@ def recommend():
 
     final_results = []
     for title in recommended_titles:
+        if len(final_results) >= 8:
+            break
+            
         try:
             res = requests.get(
-                "https://api.tvmaze.com/search/shows", 
+                "https://api.tvmaze.com/singlesearch/shows",
                 params={"q": title},
                 timeout=10,
             )
             if res.status_code == 200:
                 tvmaze_data = res.json()
                 if tvmaze_data: 
-                    final_results.append(tvmaze_data[0]['show'])
+                    final_results.append(tvmaze_data) 
         except requests.exceptions.RequestException:
             continue
 

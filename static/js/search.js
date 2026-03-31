@@ -6,16 +6,24 @@ async function readJson(res) {
     }
 }
 
-document.getElementById("searchForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
+async function performSearch(query) {
+    const container = document.getElementById("results");
 
-    const query = document.getElementById("query").value.trim();
+    if (!query) {
+        container.innerHTML = "<p>No query provided.</p>";
+        return;
+    }
 
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
     const data = await readJson(res);
 
+    if (!res.ok) {
+        container.innerHTML = `<p>${data.error || "Search failed."}</p>`;
+        return;
+    }
+
     renderResults(data);
-});
+}
 
 function renderResults(results) {
     const container = document.getElementById("results");
@@ -67,3 +75,10 @@ async function rate(show, rating) {
         })
     });
 }
+
+document.addEventListener("DOMContentLoaded", async () => {
+    const params = new URLSearchParams(window.location.search);
+    const query = (params.get("q") || "").trim();
+
+    await performSearch(query);
+});
