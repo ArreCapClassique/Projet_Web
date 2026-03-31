@@ -1,7 +1,7 @@
-from flask import Flask, render_template, session, redirect
+from flask import Flask, render_template, session, request
 
 from extensions import db, sess
-from routes import api
+from routes import api, login_required
 
 app = Flask(__name__)
 
@@ -22,6 +22,7 @@ with app.app_context():
 
 
 @app.route("/", methods=["GET"])
+@app.route("/home", methods=["GET"])
 def home():
     username = session.get("username", None)
     if username is not None:
@@ -29,12 +30,11 @@ def home():
     return render_template("/auth.html")
 
 
-@app.route("/search", methods=["GET"])
-def search():
-    username = session.get("username", None)
-    if username is not None:
-        return render_template("/search.html")
-    return redirect("/")
+@app.route("/search")
+@login_required
+def search_page():
+    query = (request.args.get("q") or "").strip()
+    return render_template("/search.html", query=query)
 
 
 if __name__ == "__main__":

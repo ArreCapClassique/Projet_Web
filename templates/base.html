@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
+    <title>{% block title %}GenFlix{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
     {% block script %}{% endblock %}
@@ -10,10 +11,12 @@
 
 <body>
     <header>
-        <h1>{% block title %}GenFlix{% endblock %}</h1>
+        <form id="headerSearchForm" action="/search" method="GET" class="search-bar">
+            <input type="text" name="q" placeholder="Search TV series..." required>
+            <button type="submit">Search</button>
+        </form>
         <nav>
             <a href="/home">Home</a>
-            <a href="/search">Search</a>
             <a href="/recommendations">Recommendations</a>
         </nav>
     </header>
