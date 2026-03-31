@@ -1,7 +1,7 @@
 from functools import wraps
 import requests
 
-from flask import Blueprint, request, session, g, jsonify
+from flask import Blueprint, request, session, g, jsonify, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from extensions import db
@@ -21,7 +21,7 @@ def login_required(f):
 
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if "user" not in session:
+        if session.get("username") is None:
             return {"error": "non autorisé"}, 401
 
         user = User.get_by_username(session["username"])
@@ -91,7 +91,7 @@ def logout():
 
 @api.route("/api/search", methods=["GET"])
 @login_required
-def api_search():
+def search():
     query = request.args.get("q")
 
     res = requests.get(
