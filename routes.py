@@ -11,48 +11,6 @@ from models import User, Series, UserInteraction
 api = Blueprint("api", __name__)
 
 
-def save_rating(user_id, show, rating):
-    tvmaze_id = show.get("id")
-    title = show.get("name")
-    image = show.get("image") or {}
-    summary = show.get("summary")
-
-    if not tvmaze_id or not title:
-        raise ValueError("Missing required show data: id or name")
-
-    series = Series.query.get(tvmaze_id)
-
-    if not series:
-        series = Series(
-            tvmaze_id=tvmaze_id,
-            title=title,
-            image_url=image.get("medium") or image.get("original"),
-            summary=summary,
-        )
-        db.session.add(series)
-        db.session.flush()
-
-    interaction = UserInteraction.query.filter_by(
-        user_id=user_id,
-        tvmaze_id=tvmaze_id,
-    ).first()
-
-    if interaction:
-        interaction.rating = rating
-        interaction.is_watched = True
-    else:
-        interaction = UserInteraction(
-            user_id=user_id,
-            tvmaze_id=tvmaze_id,
-            rating=rating,
-            is_watched=True,
-        )
-        db.session.add(interaction)
-
-    db.session.commit()
-    return interaction
-
-
 def login_required(f):
     """
     session uniquement
@@ -69,31 +27,6 @@ def login_required(f):
         user = User.get_by_username(session["username"])
         if user is None:
             session.clear()
-            return {"error": "non autorisé"}, 401
-
-        g.user = user
-        return f(*args, **kwargs)
-
-    return wrapper
-
-
-def auth_required(f):
-    """
-    session ou clé API
-
-    grace à la variable g.user, on peut accéder à l'utilisateur connecté
-    dans les fonctions de route protégées par ce décorateur
-    """
-
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        user = None
-
-        username = session.get("username")
-        if username is not None:
-            user = User.get_by_username(username)
-
-        if user is None:
             return {"error": "non autorisé"}, 401
 
         g.user = user
@@ -157,6 +90,7 @@ def logout():
 
 
 @api.route("/api/search", methods=["GET"])
+@login_required
 def api_search():
     query = request.args.get("q")
 
@@ -203,3 +137,45 @@ def rate():
             "rating": interaction.rating,
         }
     ), 200
+
+
+def save_rating(user_id, show, rating):
+    tvmaze_id = show.get("id")
+    title = show.get("name")
+    image = show.get("image") or {}
+    summary = show.get("summary")
+
+    if not tvmaze_id or not title:
+        raise ValueError("Missing required show data: id or name")
+
+    series = Series.query.get(tvmaze_id)
+
+    if not series:
+        series = Series(
+            tvmaze_id=tvmaze_id,
+            title=title,
+            image_url=image.get("medium") or image.get("original"),
+            summary=summary,
+        )
+        db.session.add(series)
+        db.session.flush()
+
+    interaction = UserInteraction.query.filter_by(
+        user_id=user_id,
+        tvmaze_id=tvmaze_id,
+    ).first()
+
+    if interaction:
+        interaction.rating = rating
+        interaction.is_watched = True
+    else:
+        interaction = UserInteraction(
+            user_id=user_id,
+            tvmaze_id=tvmaze_id,
+            rating=rating,
+            is_watched=True,
+        )
+        db.session.add(interaction)
+
+    db.session.commit()
+    return interaction
