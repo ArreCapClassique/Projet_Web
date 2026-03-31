@@ -1,7 +1,7 @@
 from functools import wraps
 import requests
 
-from flask import Blueprint, request, session, g, jsonify, redirect
+from flask import Blueprint, request, session, g, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from extensions import db
@@ -90,7 +90,6 @@ def logout():
 
 
 @api.route("/api/search", methods=["GET"])
-@login_required
 def search():
     query = request.args.get("q")
 
@@ -106,9 +105,6 @@ def search():
 
 @api.route("/api/rate", methods=["POST"])
 def rate():
-    if "username" not in session:
-        return jsonify({"error": "Authentication required"}), 401
-
     data = request.get_json(silent=True) or {}
 
     show = data.get("show")
