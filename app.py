@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
-from flask import Flask, render_template, session, request
+from flask import Flask, render_template, session, request,redirect
 
 from extensions import db, sess
 from routes import api, login_required
@@ -56,6 +56,11 @@ def debug_db():
         ],
     }
 
+@app.route("/wishlist")
+def wishlist_page():
+    if not session.get("username"):
+        return redirect("/auth")
+    return render_template("wishlist.html")
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)

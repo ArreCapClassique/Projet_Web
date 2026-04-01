@@ -1,4 +1,3 @@
-let currentQuery = "";
 async function readJson(res) {
     try {
         return await res.json();
@@ -7,18 +6,11 @@ async function readJson(res) {
     }
 }
 
-async function performSearch(query, page = 1) {
-    currentQuery = query;
-    const container = document.getElementById("results");
+async function loadWishlist(page = 1) {
+    const container = document.getElementById("wishlist-results");
+    container.innerHTML = "<p>Loading your wishlist...</p>";
 
-    if (!query) {
-        container.innerHTML = "<p>No query provided.</p>";
-        return;
-    }
-
-    container.innerHTML = "<p>Loading...</p>";
-
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&page=${page}`);
+    const res = await fetch(`/api/wishlist?page=${page}`);
     const data = await readJson(res);
 
     if (!res.ok) {
@@ -26,27 +18,24 @@ async function performSearch(query, page = 1) {
             window.location.href = "/auth";
             return;
         }
-        container.innerHTML = `<p>${data.error || "Search failed."}</p>`;
+        container.innerHTML = `<p>${data.error || "Failed to load wishlist."}</p>`;
         return;
     }
 
-    renderResults(data.results);
-    
-    const totalPages = Math.ceil(data.total / data.per_page);
-    renderPagination(data.page, totalPages, (newPage) => performSearch(currentQuery, newPage), "results");
+    renderWishlistResults(data.results);
+    renderPagination(data.page, data.pages, loadWishlist, "wishlist-results");
 }
 
-function renderResults(results) {
-    const container = document.getElementById("results");
+function renderWishlistResults(results) {
+    const container = document.getElementById("wishlist-results");
     container.innerHTML = "";
 
     if (!results || results.length === 0) {
-        container.innerHTML = "<p>No results found.</p>";
+        container.innerHTML = "<p>Your wishlist is empty. Try searching for some series!</p>";
         return;
     }
 
-    results.forEach((result, index) => {
-        const show = result.show;
+    results.forEach((show, index) => {
         const currentStatus = show.user_status; 
         const card = document.createElement("div");
         card.className = "result-card";
@@ -73,9 +62,11 @@ function renderResults(results) {
             button.addEventListener("click", async () => {
                 const status = button.dataset.status;
                 const res = await rate(show, status);
+                
                 if (res && res.ok) {
                     buttons.forEach(btn => btn.classList.remove("active"));
                     button.classList.add("active");
+                    
                 } else if (res && res.status === 401) {
                     window.location.href = "/auth";
                 }
@@ -84,22 +75,9 @@ function renderResults(results) {
     });
 }
 
-async function rate(show, status) {
-    return await fetch("/api/rate", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            show: show,
-            status: status 
-        })
-    });
-}
-
 function renderPagination(current, totalPages, callback, containerId) {
     let nav = document.getElementById("pagination-controls");
-
+    
     if (!nav) {
         nav = document.createElement("div");
         nav.id = "pagination-controls";
@@ -139,9 +117,6 @@ async function rate(show, status) {
     });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-    const params = new URLSearchParams(window.location.search);
-    const query = (params.get("q") || "").trim();
-
-    await performSearch(query);
+document.addEventListener("DOMContentLoaded", () => {
+    loadWishlist(1);
 });

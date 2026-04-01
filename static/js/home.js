@@ -1,10 +1,28 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
     await loadRecommendations();
+    const refreshBtn = document.getElementById("refresh-recommendations-btn");
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", async () => {
+
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = "Loading...";
+            refreshBtn.style.opacity = "0.6";
+            refreshBtn.style.cursor = "not-allowed";
+
+            await loadRecommendations();
+
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = "Refresh ↻";
+            refreshBtn.style.opacity = "1";
+            refreshBtn.style.cursor = "pointer";
+        });
+    }
 });
 
 async function loadRecommendations() {
     const container = document.getElementById("recommendations");
+    container.innerHTML = "<p>Loading AI recommendations...</p>";
     try {
         const res = await fetch("/api/recommend");
         const data = await res.json();
@@ -28,50 +46,57 @@ function renderRecommendations(results, container) {
 
     results.forEach((show) => {
         const card = document.createElement("div");
-        card.className = "result-card"; 
-        const safeShowName = show.name.replace(/'/g, "\\'");
-        
+        card.className = "result-card";
         const currentStatus = show.user_status;
 
         card.innerHTML = `
             <h3>${show.name}</h3>
             ${show.image ? `<img src="${show.image.medium}" alt="${show.name}">` : ""}
-            <div id="action-buttons-${show.id}" class="action-buttons">
-                ${renderButtons(show.id, safeShowName, currentStatus)}
-            </div>
+            <div id="action-buttons-${show.id}" class="action-buttons" style="display: flex; gap: 8px; padding: 16px; border-top: 1px solid var(--border);">
+                </div>
         `;
         container.appendChild(card);
+
+        renderButtons(card, show, currentStatus);
     });
 }
-function renderButtons(showId, showName, status) {
+
+function renderButtons(card, show, status) {
+    const actionDiv = card.querySelector(`#action-buttons-${show.id}`);
+    actionDiv.innerHTML = ""; 
 
     if (["0", "1", "2"].includes(status)) {
-        return `
-            <button type="button" class="${status === '0' ? 'active' : ''}" data-status="0" onclick="rateRecommended(${showId}, '${showName}', '0')">Like</button>
-            <button type="button" class="${status === '1' ? 'active' : ''}" data-status="1" onclick="rateRecommended(${showId}, '${showName}', '1')">Neutral</button>
-            <button type="button" class="${status === '2' ? 'active' : ''}" data-status="2" onclick="rateRecommended(${showId}, '${showName}', '2')">Dislike</button>
-        `;
+        // Like, Neutral, Dislike
+        const btnLike = createButton("Like", status === "0", "0", () => rateRecommended(show, "0", card));
+        const btnNeutral = createButton("Neutral", status === "1", "1", () => rateRecommended(show, "1", card));
+        const btnDislike = createButton("Dislike", status === "2", "2", () => rateRecommended(show, "2", card));
+        actionDiv.append(btnLike, btnNeutral, btnDislike);
+    } else {
+        // Watched, Interested, Not Interested
+        const btnWatched = createButton("Watched", false, null, () => renderButtons(card, show, "0"));
+        const btnInterested = createButton("Interested", status === "3", "3", () => rateRecommended(show, "3", card));
+        const btnNotInt = createButton("Not Int.", status === "4", "4", () => rateRecommended(show, "4", card));
+        actionDiv.append(btnWatched, btnInterested, btnNotInt);
     }
-  
-    return `
-        <button type="button" onclick="showWatchedOptions(${showId}, '${showName}')">Watched</button>
-        <button type="button" class="${status === '3' ? 'active' : ''}" data-status="3" onclick="rateRecommended(${showId}, '${showName}', '3')">Interested</button>
-        <button type="button" class="${status === '4' ? 'active' : ''}" data-status="4" onclick="rateRecommended(${showId}, '${showName}', '4')">Not Interested</button>
-    `;
 }
 
-window.showWatchedOptions = function(showId, showName) {
-    const actionDiv = document.getElementById(`action-buttons-${showId}`);
-    actionDiv.innerHTML = renderButtons(showId, showName, "0");
-};
+function createButton(text, isActive, statusId, onClick) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = text;
+    if (isActive) btn.classList.add("active");
+    if (statusId !== null) btn.dataset.status = statusId; 
+    btn.addEventListener("click", onClick);
+    return btn;
+}
 
-window.rateRecommended = async function(showId, showName, status) {
+window.rateRecommended = async function(show, status, card) {
     try {
         const res = await fetch("/api/rate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                show: { id: showId, name: showName },
+                show: show, 
                 status: status
             })
         });
@@ -82,8 +107,7 @@ window.rateRecommended = async function(showId, showName, status) {
         }
 
         if (res.ok) {
-            const actionDiv = document.getElementById(`action-buttons-${showId}`);
-            actionDiv.innerHTML = renderButtons(showId, showName, status);
+            renderButtons(card, show, status);
         }
     } catch (err) {
         console.error(err);

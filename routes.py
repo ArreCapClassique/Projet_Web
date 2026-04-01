@@ -103,16 +103,59 @@ def get_user_status(user_id, tvmaze_id):
 @login_required
 def search():
     query = request.args.get("q")
-    res = requests.get("https://api.tvmaze.com/search/shows", params={"q": query}, timeout=10)
-    res.raise_for_status()
-    results = res.json()
-    
-    user_id = g.user.id
-    for item in results:
-        item['show']['user_status'] = get_user_status(user_id, item['show']['id'])
-    
-    return jsonify(results), 200
+    page = int(request.args.get("page", 1)) 
+    per_page = 9
 
+    res = requests.get(
+        "https://api.tvmaze.com/search/shows",
+        params={"q": query},
+        timeout=10,
+    )
+    res.raise_for_status()
+    all_results = res.json()
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_results = all_results[start:end]
+
+    user_id = g.user.id
+    for item in paginated_results:
+        item['show']['user_status'] = get_user_status(user_id, item['show']['id'])
+
+    return jsonify({
+        "results": paginated_results,
+        "total": len(all_results),
+        "page": page,
+        "per_page": per_page
+    }), 200
+
+@api.route("/api/wishlist", methods=["GET"])
+@login_required
+def get_wishlist():
+    page = int(request.args.get("page", 1))
+    per_page = 9
+
+    pagination = UserInteraction.query.filter_by(user_id=g.user.id, status="3")\
+        .order_by(UserInteraction.updated_at.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    results = []
+    for interaction in pagination.items:
+        show_data = {
+            "id": interaction.series.tvmaze_id,
+            "name": interaction.series.title,
+            "image": {"medium": interaction.series.image_url},
+            "summary": interaction.series.summary,
+            "user_status": "3"
+        }
+        results.append(show_data)
+
+    return jsonify({
+        "results": results,
+        "total": pagination.total,
+        "page": page,
+        "pages": pagination.pages
+    }), 200
 
 @api.route("/api/rate", methods=["POST"])
 def rate():
@@ -169,6 +212,13 @@ def save_rating(user_id, show, status):
         )
         db.session.add(series)
         db.session.flush()
+    else:
+        new_image_url = image.get("medium") or image.get("original")
+        if not series.image_url and new_image_url:
+            series.image_url = new_image_url
+        if not series.summary and summary:
+            series.summary = summary
+
 
     interaction = UserInteraction.query.filter_by(
         user_id=user_id,
@@ -176,13 +226,12 @@ def save_rating(user_id, show, status):
     ).first()
 
     if interaction:
-        interaction.status = status 
+        interaction.status = status
     else:
         interaction = UserInteraction(
             user_id=user_id,
             tvmaze_id=tvmaze_id,
             status=status,
-          
         )
         db.session.add(interaction)
 

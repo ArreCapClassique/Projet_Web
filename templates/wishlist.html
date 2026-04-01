@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}My Wishlist{% endblock %}
+
+{% block script %}
+<script src="{{ url_for('static', filename='js/wishlist.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<h1>My Wishlist</h1>
+<div id="wishlist-results" class="card-grid"></div>
+
+<div id="pagination-controls" class="pagination"></div>
+{% endblock %}
