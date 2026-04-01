@@ -18,6 +18,10 @@ async function performSearch(query) {
     const data = await readJson(res);
 
     if (!res.ok) {
+        if (res.status === 401) {
+            window.location.href = "/auth";
+            return;
+        }
         container.innerHTML = `<p>${data.error || "Search failed."}</p>`;
         return;
     }
@@ -36,42 +40,53 @@ function renderResults(results) {
 
     results.forEach((result, index) => {
         const show = result.show;
+        const currentStatus = show.user_status; 
         const card = document.createElement("div");
         card.className = "result-card";
 
         const buttonGroupId = `buttons-${show.id}-${index}`;
+
 
         card.innerHTML = `
             <h3>${show.name}</h3>
             ${show.image ? `<img src="${show.image.medium}" alt="${show.name}">` : ""}
             <div>${show.summary || "<p>No summary available.</p>"}</div>
             <div id="${buttonGroupId}">
-                <button type="button" data-rating="1">Aimé</button>
-                <button type="button" data-rating="0">Neutre</button>
-                <button type="button" data-rating="-1">N’aime pas</button>
+                <button type="button" class="${currentStatus === '0' ? 'active' : ''}" data-status="0">Like</button>
+                <button type="button" class="${currentStatus === '1' ? 'active' : ''}" data-status="1">Neutral</button>
+                <button type="button" class="${currentStatus === '2' ? 'active' : ''}" data-status="2">Dislike</button>
             </div>
         `;
 
         container.appendChild(card);
 
-        const buttons = card.querySelectorAll("button[data-rating]");
+        const buttons = card.querySelectorAll("button[data-status]");
         buttons.forEach((button) => {
             button.addEventListener("click", async () => {
-                await rate(show, button.dataset.rating);
+                const status = button.dataset.status;
+                
+                const res = await rate(show, status);
+
+                if (res && res.ok) {
+                    buttons.forEach(btn => btn.classList.remove("active"));
+                    button.classList.add("active");
+                } else if (res && res.status === 401) {
+                    window.location.href = "/auth";
+                }
             });
         });
     });
 }
 
-async function rate(show, rating) {
-    await fetch("/api/rate", {
+async function rate(show, status) {
+    return await fetch("/api/rate", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
             show: show,
-            rating: rating
+            status: status 
         })
     });
 }

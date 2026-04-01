@@ -1,8 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, render_template, session, request
 
 from extensions import db, sess
 from routes import api, login_required
 from models import User, Series, UserInteraction
+
 
 app = Flask(__name__)
 
@@ -48,7 +51,7 @@ def debug_db():
         "users": [(u.id, u.username) for u in users],
         "series": [{"tvmaze_id": s.tvmaze_id, "title": s.title, "summary": s.summary} for s in series],
         "interactions": [
-            {"user_id": i.user_id, "series_id": i.tvmaze_id, "rating": i.rating}
+            {"user_id": i.user_id, "series_id": i.tvmaze_id, "statue": i.status}
             for i in interactions
         ],
     }
