@@ -1,7 +1,8 @@
 import os
 import json
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types 
 import typing_extensions as typing
 
 from functools import wraps
@@ -94,20 +95,23 @@ def logout():
     session.clear()
     return {"ok": True}
 
+def get_user_status(user_id, tvmaze_id):
+    interaction = UserInteraction.query.filter_by(user_id=user_id, tvmaze_id=tvmaze_id).first()
+    return interaction.status if interaction else None
 
 @api.route("/api/search", methods=["GET"])
 @login_required
 def search():
     query = request.args.get("q")
-
-    res = requests.get(
-        "https://api.tvmaze.com/search/shows",
-        params={"q": query},
-        timeout=10,
-    )
+    res = requests.get("https://api.tvmaze.com/search/shows", params={"q": query}, timeout=10)
     res.raise_for_status()
-
-    return jsonify(res.json()), 200
+    results = res.json()
+    
+    user_id = g.user.id
+    for item in results:
+        item['show']['user_status'] = get_user_status(user_id, item['show']['id'])
+    
+    return jsonify(results), 200
 
 
 @api.route("/api/rate", methods=["POST"])
@@ -195,7 +199,8 @@ class RecommendationList(typing.TypedDict):
 def recommend():
     username = session.get("username")
     user = User.get_by_username(username) if username else None
-
+    user_id = user.id if user else None
+    
     interactions = []
     if user:
         interactions = UserInteraction.query.filter_by(user_id=user.id).all()
@@ -224,35 +229,37 @@ def recommend():
         series_title = interaction.series.title 
         exclude_titles.append(series_title)
         
-        if interaction.status == "0":
-            liked.append(series_title)
-        elif interaction.status == "1":
-            neutral.append(series_title)
-        elif interaction.status == "2":
-            disliked.append(series_title)
-        elif interaction.status == "3":
-            interested.append(series_title)
-        elif interaction.status == "4":
-            not_interested.append(series_title)
-
-    prompt = "Tu es un expert en séries TV. Un utilisateur a les préférences suivantes:\n"
-    prompt += f"- Séries qu'il ADORE : {', '.join(liked) if liked else 'Aucune'}\n"
-    prompt += f"- Séries MOYENNES : {', '.join(neutral) if neutral else 'Aucune'}\n"
-    prompt += f"- Séries qu'il DÉTESTE : {', '.join(disliked) if disliked else 'Aucune'}\n"
-    prompt += f"- Séries qui l'INTÉRESSENT : {', '.join(interested) if interested else 'Aucune'}\n"
-    prompt += f"- Séries qui NE l'INTÉRESSENT PAS : {', '.join(not_interested) if not_interested else 'Aucune'}\n"
+    match interaction.status:
+            case "0":
+                liked.append(series_title)
+            case "1":
+                neutral.append(series_title)
+            case "2":
+                disliked.append(series_title)
+            case "3":
+                interested.append(series_title)
+            case "4":
+                not_interested.append(series_title)
+                
+    prompt = "You are an expert in TV series. A user has the following viewing preferences:\n"
+    prompt += f"- Series they LOVE: {', '.join(liked) if liked else 'None'}\n"
+    prompt += f"- Series they find OKAY: {', '.join(neutral) if neutral else 'None'}\n"
+    prompt += f"- Series they DISLIKE: {', '.join(disliked) if disliked else 'None'}\n"
+    prompt += f"- Series they are INTERESTED in: {', '.join(interested) if interested else 'None'}\n"
+    prompt += f"- Series they are NOT INTERESTED in: {', '.join(not_interested) if not_interested else 'None'}\n"
     
-    prompt += f"\nIMPORTANT : NE RECOMMANDE SURTOUT PAS les séries suivantes car l'utilisateur les connaît déjà : {', '.join(exclude_titles)}.\n"
+    prompt += f"\nIMPORTANT: DO NOT recommend the following series because the user already knows them: {', '.join(exclude_titles)}.\n"
     
-    prompt += "En te basant sur ces goûts, recommande 12 nouvelles séries télévisées. Retourne UNIQUEMENT les titres originaux en anglais."
+    prompt += "Based on these preferences, recommend 12 new TV series. Return ONLY their original English titles."
 
-    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+    
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
+        response = client.models.generate_content(
+            model='gemini-3.1-flash-lite-preview',
+            contents=prompt,
+            config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=RecommendationList,
             ),
@@ -279,5 +286,8 @@ def recommend():
                     final_results.append(tvmaze_data) 
         except requests.exceptions.RequestException:
             continue
+        
+    for show in final_results:
+        show['user_status'] = get_user_status(user_id, show['id']) if user_id else None
 
     return jsonify({"results": final_results}), 200

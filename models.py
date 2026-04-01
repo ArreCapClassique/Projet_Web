@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from extensions import db
 
 
@@ -11,9 +11,6 @@ class User(db.Model):
 
     interactions = db.relationship(
         "UserInteraction", backref="user", lazy=True, cascade="all, delete-orphan"
-    )
-    recommendations = db.relationship(
-        "RecommendationLog", backref="user", lazy=True, cascade="all, delete-orphan"
     )
 
     @classmethod
@@ -42,27 +39,20 @@ class UserInteraction(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     tvmaze_id = db.Column(db.Integer, db.ForeignKey("series.tvmaze_id"), nullable=False)
 
-    rating = db.Column(
+    status = db.Column(
         db.Enum(
-            "1",
-            "0",
-            "-1",
+            "0", #Like
+            "1", #Neutral
+            "2", #Dislike
+            "3", #Interested
+            "4", #Not Interested
         ),
         nullable=False,
     )
 
-    is_watched = db.Column(db.Boolean, default=False)
-
     updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
     )
 
-
-class RecommendationLog(db.Model):
-    __tablename__ = "recommendation_logs"
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    tvmaze_id = db.Column(db.Integer, db.ForeignKey("series.tvmaze_id"), nullable=False)
-
-    recommended_at = db.Column(db.DateTime, default=datetime.utcnow)

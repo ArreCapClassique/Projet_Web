@@ -2,19 +2,14 @@
 
 {% block title %}Home{% endblock %}
 
+{% block script %}
+<script src="{{ url_for('static', filename='js/home.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
-<h1>Welcome {{ username }}!</h1>
+<h2>Recommended for you</h2>
 
-<p>You have rated {{ rated_count }} series.</p>
-
-<h2>Recent activity</h2>
-
-<ul>
-    {% for item in recent %}
-    <li>{{ item.title }} — {{ item.rating }}</li>
-    {% else %}
-    <li>No activity yet.</li>
-    {% endfor %}
-</ul>
-
+<div id="recommendations" class="card-grid">
+    <p>Loading AI recommendations...</p>
+</div>
 {% endblock %}

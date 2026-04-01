@@ -251,6 +251,7 @@ p {
     font-size: 0.95rem;
     display: -webkit-box;
     -webkit-line-clamp: 12;
+    line-clamp: 12;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -504,4 +505,45 @@ hr {
         padding-top: 12px;
         padding-bottom: 12px;
     }
+}
+
+
+.result-card button.active[data-status="0"], 
+.result-card button.active[data-rating="0"] {
+    background-color: rgba(46, 204, 113, 0.2) !important;
+    border-color: var(--success) !important;
+    color: var(--success) !important;
+}
+
+.result-card button.active[data-status="1"],
+.result-card button.active[data-rating="1"] {
+    background-color: rgba(245, 197, 24, 0.2) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+
+.result-card button.active[data-status="2"],
+.result-card button.active[data-rating="2"] {
+    background-color: rgba(255, 92, 92, 0.2) !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+}
+
+.result-card button.active[data-status="3"] {
+    background-color: rgba(52, 152, 219, 0.2) !important;
+    border-color: #3498db !important;
+    color: #3498db !important;
+}
+
+.result-card button.active[data-status="4"] {
+    background-color: rgba(149, 165, 166, 0.2) !important;
+    border-color: #95a5a6 !important;
+    color: #95a5a6 !important;
+}
+
+#recommendations {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 22px;
+    align-items: stretch;
 }
