@@ -33,17 +33,13 @@ function renderRecommendations(results, container) {
         const currentStatus = show.user_status;
 
         card.innerHTML = `
-            <h3>${show.name}</h3>
-            ${show.image ? `
-                <img 
-                    src="${show.image}" 
-                    alt="${show.name}" 
-                    class="clickable-image"
-                    onclick="openTvmaze(${show.id})"
-                >
-            ` : ""}
-            <div id="action-buttons-${show.id}" class="action-buttons">
-                ${renderButtons(show.id, safeShowName, show.image, currentStatus)}
+            ${show.image ? `<img src="${show.image}" alt="${show.name}" onclick="openTvmaze(${show.id})">` : ""}
+            
+            <div class="card-info">
+                <h3>${show.name}</h3>
+                <div id="action-buttons-${show.id}" class="action-buttons">
+                    ${renderButtons(show.id, safeShowName, show.image, currentStatus)}
+                </div>
             </div>
         `;
         container.appendChild(card);

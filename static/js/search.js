@@ -47,20 +47,15 @@ function renderResults(results) {
         const buttonGroupId = `buttons-${show.id}-${index}`;
 
         card.innerHTML = `
-            <h3>${show.name}</h3>
-            ${show.image ? `
-                <img 
-                    src="${show.image}" 
-                    alt="${show.name}" 
-                    class="clickable-image"
-                    onclick="openTvmaze(${show.id})"
-                >
-            ` : ""}
-            <div>${show.summary || "<p>No summary available.</p>"}</div>
-            <div id="${buttonGroupId}">
-                <button type="button" class="${currentStatus === '0' ? 'active' : ''}" data-status="0">Like</button>
-                <button type="button" class="${currentStatus === '1' ? 'active' : ''}" data-status="1">Neutral</button>
-                <button type="button" class="${currentStatus === '2' ? 'active' : ''}" data-status="2">Dislike</button>
+            ${show.image ? `<img src="${show.image}" alt="${show.name}" onclick="openTvmaze(${show.id})">` : ""}
+            
+            <div class="card-info">
+                <h3>${show.name}</h3>
+                <div class="buttons" id="${buttonGroupId}">
+                    <button type="button" class="${currentStatus === '0' ? 'active' : ''}" data-status="0">Like</button>
+                    <button type="button" class="${currentStatus === '1' ? 'active' : ''}" data-status="1">Neutral</button>
+                    <button type="button" class="${currentStatus === '2' ? 'active' : ''}" data-status="2">Dislike</button>
+                </div>
             </div>
         `;
 
