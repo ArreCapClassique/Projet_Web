@@ -48,7 +48,14 @@ function renderResults(results) {
 
         card.innerHTML = `
             <h3>${show.name}</h3>
-            ${show.image ? `<img src="${show.image}" alt="${show.name}">` : ""}
+            ${show.image ? `
+                <img 
+                    src="${show.image}" 
+                    alt="${show.name}" 
+                    class="clickable-image"
+                    onclick="openTvmaze(${show.id})"
+                >
+            ` : ""}
             <div>${show.summary || "<p>No summary available.</p>"}</div>
             <div id="${buttonGroupId}">
                 <button type="button" class="${currentStatus === '0' ? 'active' : ''}" data-status="0">Like</button>
