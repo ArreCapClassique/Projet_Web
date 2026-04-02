@@ -40,16 +40,15 @@ function renderResults(results) {
 
     results.forEach((result, index) => {
         const show = result.show;
-        const currentStatus = show.user_status; 
+        const currentStatus = show.user_status;
         const card = document.createElement("div");
         card.className = "result-card";
 
         const buttonGroupId = `buttons-${show.id}-${index}`;
 
-
         card.innerHTML = `
             <h3>${show.name}</h3>
-            ${show.image ? `<img src="${show.image.medium}" alt="${show.name}">` : ""}
+            ${show.image ? `<img src="${show.image}" alt="${show.name}">` : ""}
             <div>${show.summary || "<p>No summary available.</p>"}</div>
             <div id="${buttonGroupId}">
                 <button type="button" class="${currentStatus === '0' ? 'active' : ''}" data-status="0">Like</button>
@@ -64,7 +63,7 @@ function renderResults(results) {
         buttons.forEach((button) => {
             button.addEventListener("click", async () => {
                 const status = button.dataset.status;
-                
+
                 const res = await rate(show, status);
 
                 if (res && res.ok) {
@@ -86,7 +85,7 @@ async function rate(show, status) {
         },
         body: JSON.stringify({
             show: show,
-            status: status 
+            status: status
         })
     });
 }

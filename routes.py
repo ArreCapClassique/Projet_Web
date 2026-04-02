@@ -14,6 +14,8 @@ from models import Series, User, UserInteraction
 
 api = Blueprint("api", __name__)
 
+PLACEHOLDER_IMAGE = "https://static.tvmaze.com/images/no-img/no-img-portrait-text.png"
+
 
 def login_required(f):
     """
@@ -101,7 +103,6 @@ def get_user_status(user_id, tvmaze_id):
 
 
 @api.route("/api/search", methods=["GET"])
-@login_required
 def search():
     query = request.args.get("q")
     res = requests.get(
@@ -112,9 +113,20 @@ def search():
     res.raise_for_status()
     results = res.json()
 
-    user_id = g.user.id
+    user = None
+    username = session.get("username")
+
+    if username:
+        user = User.get_by_username(username)
+
+    user_id = user.id if user else None
+
     for item in results:
-        item["show"]["user_status"] = get_user_status(user_id, item["show"]["id"])
+        show = item.get("show", {})
+        img = show.get("image") or {}
+
+        show["image"] = img.get("medium") or PLACEHOLDER_IMAGE
+        show["user_status"] = get_user_status(user_id, show.get("id"))
 
     return jsonify(results), 200
 
@@ -155,8 +167,7 @@ def rate():
 def save_rating(user_id, show, status):
     tvmaze_id = show.get("id")
     title = show.get("name")
-    image = show.get("image") or {}
-    summary = show.get("summary")
+    image = show.get("image")
 
     if not tvmaze_id or not title:
         raise ValueError("Missing required show data: id or name")
@@ -167,8 +178,7 @@ def save_rating(user_id, show, status):
         series = Series(
             tvmaze_id=tvmaze_id,
             title=title,
-            image_url=image.get("medium") or image.get("original"),
-            summary=summary,
+            image_url=image or PLACEHOLDER_IMAGE,
         )
         db.session.add(series)
         db.session.flush()
@@ -217,7 +227,13 @@ def recommend():
 
             shows = res.json()
             shows.sort(key=lambda x: x.get("weight", 0), reverse=True)
-            return jsonify({"results": shows[:8]}), 200
+            user = None
+            username = session.get("username")
+
+            if username:
+                user = User.get_by_username(username)
+
+            user_id = user.id if user else None
         except requests.exceptions.RequestException as e:
             return jsonify({"error": f"TVmaze network error: {str(e)}"}), 500
     # Case B
@@ -286,6 +302,11 @@ def recommend():
             if res.status_code == 200:
                 tvmaze_data = res.json()
                 if tvmaze_data:
+                    img = tvmaze_data.get("image") or {}
+                    tvmaze_data["image"] = img.get("medium") or PLACEHOLDER_IMAGE
+                    tvmaze_data["user_status"] = (
+                        get_user_status(user_id, tvmaze_data["id"]) if user_id else None
+                    )
                     final_results.append(tvmaze_data)
         except requests.exceptions.RequestException:
             continue
