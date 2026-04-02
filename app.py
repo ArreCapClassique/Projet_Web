@@ -55,7 +55,7 @@ def debug_db():
     return {
         "users": [(u.id, u.username) for u in users],
         "series": [
-            {"tvmaze_id": s.tvmaze_id, "title": s.title, "summary": s.summary}
+            {"tvmaze_id": s.tvmaze_id, "title": s.title}
             for s in series
         ],
         "interactions": [

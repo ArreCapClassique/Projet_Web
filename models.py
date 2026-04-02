@@ -24,7 +24,6 @@ class Series(db.Model):
     tvmaze_id = db.Column(db.Integer, primary_key=True, autoincrement=False)
     title = db.Column(db.String(255), nullable=False)
     image_url = db.Column(db.String(512))
-    summary = db.Column(db.Text)
 
     interactions = db.relationship("UserInteraction", backref="series", lazy=True)
 
