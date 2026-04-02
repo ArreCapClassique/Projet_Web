@@ -1,11 +1,11 @@
 from dotenv import load_dotenv
-load_dotenv()
-from flask import Flask, render_template, session, request
+from flask import Flask, render_template, request, session
 
 from extensions import db, sess
+from models import Series, User, UserInteraction
 from routes import api, login_required
-from models import User, Series, UserInteraction
 
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -34,6 +34,11 @@ def home():
     return render_template("/auth.html")
 
 
+@app.route("/auth")
+def auth_page():
+    return render_template("/auth.html")
+
+
 @app.route("/search")
 @login_required
 def search_page():
@@ -49,7 +54,10 @@ def debug_db():
 
     return {
         "users": [(u.id, u.username) for u in users],
-        "series": [{"tvmaze_id": s.tvmaze_id, "title": s.title, "summary": s.summary} for s in series],
+        "series": [
+            {"tvmaze_id": s.tvmaze_id, "title": s.title, "summary": s.summary}
+            for s in series
+        ],
         "interactions": [
             {"user_id": i.user_id, "series_id": i.tvmaze_id, "statue": i.status}
             for i in interactions

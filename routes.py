@@ -1,19 +1,16 @@
-import os
 import json
-import requests
-from google import genai
-from google.genai import types 
-import typing_extensions as typing
-
+import os
 from functools import wraps
-import requests
 
-from flask import Blueprint, request, session, g, jsonify, redirect
-from werkzeug.security import generate_password_hash, check_password_hash
+import requests
+import typing_extensions as typing
+from flask import Blueprint, g, jsonify, request, session
+from google import genai
+from google.genai import types
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from extensions import db
-from models import User, Series, UserInteraction
-
+from models import Series, User, UserInteraction
 
 api = Blueprint("api", __name__)
 
@@ -95,34 +92,40 @@ def logout():
     session.clear()
     return {"ok": True}
 
+
 def get_user_status(user_id, tvmaze_id):
-    interaction = UserInteraction.query.filter_by(user_id=user_id, tvmaze_id=tvmaze_id).first()
+    interaction = UserInteraction.query.filter_by(
+        user_id=user_id, tvmaze_id=tvmaze_id
+    ).first()
     return interaction.status if interaction else None
+
 
 @api.route("/api/search", methods=["GET"])
 @login_required
 def search():
     query = request.args.get("q")
-    res = requests.get("https://api.tvmaze.com/search/shows", params={"q": query}, timeout=10)
+    res = requests.get(
+        "https://api.tvmaze.com/search/shows",
+        params={"q": query},
+        timeout=10,
+    )
     res.raise_for_status()
     results = res.json()
-    
+
     user_id = g.user.id
     for item in results:
-        item['show']['user_status'] = get_user_status(user_id, item['show']['id'])
-    
+        item["show"]["user_status"] = get_user_status(user_id, item["show"]["id"])
+
     return jsonify(results), 200
 
 
 @api.route("/api/rate", methods=["POST"])
+@login_required
 def rate():
-    if "username" not in session:
-        return jsonify({"error": "Authentication required"}), 401
-
     data = request.get_json(silent=True) or {}
 
     show = data.get("show")
-    status = data.get("status") 
+    status = data.get("status")
 
     if not show or not status:
         return jsonify({"error": "Missing show or status"}), 400
@@ -144,7 +147,7 @@ def rate():
             "message": "Status saved successfully",
             "interaction_id": interaction.id,
             "tvmaze_id": interaction.tvmaze_id,
-            "status": interaction.status, 
+            "status": interaction.status,
         }
     ), 200
 
@@ -176,13 +179,12 @@ def save_rating(user_id, show, status):
     ).first()
 
     if interaction:
-        interaction.status = status 
+        interaction.status = status
     else:
         interaction = UserInteraction(
             user_id=user_id,
             tvmaze_id=tvmaze_id,
             status=status,
-          
         )
         db.session.add(interaction)
 
@@ -192,15 +194,17 @@ def save_rating(user_id, show, status):
 
 ##### ROUTE RECOMMANDATION ###
 
+
 class RecommendationList(typing.TypedDict):
     titles: list[str]
+
 
 @api.route("/api/recommend", methods=["GET"])
 def recommend():
     username = session.get("username")
     user = User.get_by_username(username) if username else None
     user_id = user.id if user else None
-    
+
     interactions = []
     if user:
         interactions = UserInteraction.query.filter_by(user_id=user.id).all()
@@ -209,27 +213,26 @@ def recommend():
     if not user or not interactions:
         try:
             res = requests.get("https://api.tvmaze.com/shows", timeout=10)
-            if res.status_code == 200:
-                shows = res.json()
-                shows.sort(key=lambda x: x.get('weight', 0), reverse=True)
-                return jsonify({"results": shows[:8]}), 200 
-            else:
-                return jsonify({"error": "Failed to fetch popular shows"}), res.status_code
+            res.raise_for_status()
+
+            shows = res.json()
+            shows.sort(key=lambda x: x.get("weight", 0), reverse=True)
+            return jsonify({"results": shows[:8]}), 200
         except requests.exceptions.RequestException as e:
             return jsonify({"error": f"TVmaze network error: {str(e)}"}), 500
-    #Case B
+    # Case B
     liked = []
     neutral = []
     disliked = []
     interested = []
     not_interested = []
-    exclude_titles = [] 
-    
+    exclude_titles = []
+
     for interaction in interactions:
-        series_title = interaction.series.title 
+        series_title = interaction.series.title
         exclude_titles.append(series_title)
-        
-    match interaction.status:
+
+        match interaction.status:
             case "0":
                 liked.append(series_title)
             case "1":
@@ -240,24 +243,24 @@ def recommend():
                 interested.append(series_title)
             case "4":
                 not_interested.append(series_title)
-                
+
     prompt = "You are an expert in TV series. A user has the following viewing preferences:\n"
     prompt += f"- Series they LOVE: {', '.join(liked) if liked else 'None'}\n"
     prompt += f"- Series they find OKAY: {', '.join(neutral) if neutral else 'None'}\n"
     prompt += f"- Series they DISLIKE: {', '.join(disliked) if disliked else 'None'}\n"
     prompt += f"- Series they are INTERESTED in: {', '.join(interested) if interested else 'None'}\n"
     prompt += f"- Series they are NOT INTERESTED in: {', '.join(not_interested) if not_interested else 'None'}\n"
-    
-    prompt += f"\nIMPORTANT: DO NOT recommend the following series because the user already knows them: {', '.join(exclude_titles)}.\n"
-    
+    prompt += (
+        f"\nIMPORTANT: DO NOT recommend the following series because the user already knows them: "
+        f"{', '.join(sorted(exclude_titles)) if exclude_titles else 'None'}.\n"
+    )
     prompt += "Based on these preferences, recommend 12 new TV series. Return ONLY their original English titles."
 
-    
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
     try:
         response = client.models.generate_content(
-            model='gemini-3.1-flash-lite-preview',
+            model="gemini-3.1-flash-lite-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -273,7 +276,7 @@ def recommend():
     for title in recommended_titles:
         if len(final_results) >= 8:
             break
-            
+
         try:
             res = requests.get(
                 "https://api.tvmaze.com/singlesearch/shows",
@@ -282,12 +285,12 @@ def recommend():
             )
             if res.status_code == 200:
                 tvmaze_data = res.json()
-                if tvmaze_data: 
-                    final_results.append(tvmaze_data) 
+                if tvmaze_data:
+                    final_results.append(tvmaze_data)
         except requests.exceptions.RequestException:
             continue
-        
+
     for show in final_results:
-        show['user_status'] = get_user_status(user_id, show['id']) if user_id else None
+        show["user_status"] = get_user_status(user_id, show["id"]) if user_id else None
 
     return jsonify({"results": final_results}), 200
